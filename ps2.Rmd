@@ -1,0 +1,884 @@
+---
+title: "Problemset 2"
+author: 'Bargetto Cristina 885847, Iavarone Marika 886338, Scanu Anna 1012903 '
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_document: default
+  word_document: default
+---
+
+```{r ,include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message=FALSE)
+library(MASS)
+library(class)
+library(nnet)
+library(ellipse)
+```
+
+## Exercise 1 
+
+Consider the pulp_paper data set which consists of n = 62 observations on 8 measurements divided into 4 paper properties and 4 pulp fiber characteristics.
+
+Paper properties:
+
+* BL: Breaking length (length of the paper for which it would break due to its own weight)
+
+* EM: Elastic modulus (flexibility of the paper)
+
+* SF: Stress at failure (percentage of the length of paper you can stretch until it breaks)
+
+* BS: Burst strength (stress that paper can bear before bursting)
+
+Pulp fiber characteristics:
+
+* AFL: Arithmetic fiber length (arithmetic mean of the length of fibers measured)
+
+* LFF: Long fiber fraction (proportion of long fiber)
+
+* FFF: Fine fiber fraction (proportion of fine fiber)
+
+* ZST: Zero span tensile (tensile strength of fiber)
+
+
+```{r ,echo = FALSE, 'pander'}
+#install.packages('pander')
+library(pander)
+pulp_paper<-read.table("data/pulp_paper.txt")  
+names(pulp_paper)<-c("BL", "EM", "SF", "BS",
+                     "AFL", "LFF", "FFF", "ZST")
+n<-dim(pulp_paper)[1]; 
+p<-dim(pulp_paper)[2]; 
+var.names<-names(pulp_paper)
+set.caption("Head of pulp_paper dataset")
+pander(head(pulp_paper))
+```
+
+Consider the correlation matrix R
+
+```{r,echo = FALSE}
+R<-cor(pulp_paper)   
+set.caption("Correlation matrix")
+pander(round(R,3))
+```
+
+We can see that the first four variables (BL, EM, SF, BS) are highly correlated since they describe measurements about resistance of paper before breaking. So we expect they will load on the same factor in the Factor Analysis (treated later).
+
+Considering the other four characteristics regarding the pulp fiber, we have that AFL and LFF are highly correlated since both give us information about the length of fibers, in fact we expect that if the proportion of long fiber was high, the arithmetic mean of the length of fibers measured would be high too. On the other hand ZST seems to fit well with all the first six variables since it expresses pulp fiber characteristic measured on a slice of paper.
+
+Note that the FFF variable has negative correlation coefficients quite sizable relative to all the other variables. This is reasonable since it is the only variable which expresses a bad characteristic of the paper because the finer fibers are, the less resistant paper will be. 
+
+Now, let us compute the maximum likelihood factor analysis with m=2.
+
+```{r}
+pulp_paper.fa_ml<-factanal(covmat=R, factors = 2, rotation = "none")
+```
+
+```{r, echo=FALSE}
+pulp_paper.fa_ml
+L.ml<-pulp_paper.fa_ml$loadings
+```
+
+Firstly, we analyze the uniqueness of our variables: 
+
+```{r, echo=FALSE}
+set.caption("Specific variances")
+pander(pulp_paper.fa_ml$uniquenesses)
+```
+
+the value for FFF is high with respect to the other variables.
+
+The uniqueness $\hat{\psi_i}$ corresponds to the proportion of variability (specific variance), which can not be explained by a linear combination of the factors. A high uniqueness for a FFF indicates that the factors do not account well for its variance.
+
+On the other hand the first six variables having low values, are well explained by the model with at least 2 factors since
+
+* BL, EM, SF and BS 
+
+* AFL and LFF 
+
+are two groups of highly correlated variables, each one expressed by a different factor.
+
+Since 
+$$var(X_j) = h_{j}^2 + \psi_j = communality + specific \ variance $$
+and the variance for the standardized data is equal to one, the communalities are computed by subtracting the specific variances from the variance as expressed below:
+
+$$ \hat{h_i^2} = 1 - \hat{\psi_i} $$
+Hence an high value of uniqueness implies a low value of communality.
+
+So the communalities are: 
+
+```{r,echo=FALSE}
+set.caption("Communalities")
+hi.sq<-diag(crossprod(t(pulp_paper.fa_ml$loadings)))
+pander(hi.sq)
+```
+
+The communality for FFF variable is in fact 0.583, indicating that about 58% of the variation in FFF is explained by the factor model. This suggest that FFF has little in common with the other variables.
+
+Also ZST has a communality value that does not reach the 80%, since it has not a very high correlation coefficient with any variable. So, this probably means that adding a new factor, ZST might be explained by Factor 3. 
+
+
+Let us compute the residual matrix
+```{r, echo=FALSE}
+Residual<-R-(L.ml%*%t(L.ml)+diag(pulp_paper.fa_ml$uniquenesses))
+set.caption("Residual matrix")
+pander(round(Residual, 3))
+```
+
+Most of the entries are close to zero, this means that our factor model is appropriate.
+In fact, the sum of the squared entries of the residual matrix is fairly small.
+
+```{r}
+sum(Residual^2)
+```
+
+
+Computing the cumulative proportion of variance, we have that the percentage of the total variation explained in our model by two factors is 87.7%, that is appreciable. 
+
+```{r}
+sum(hi.sq[1:p])/p
+```
+
+Repeat the same maximum likelihood factor analysis with m=3.
+
+```{r}
+pulp_paper.fa2_ml<-factanal(covmat=R, factors = 3, rotation = "none")
+```
+```{r,echo=FALSE}
+pulp_paper.fa2_ml
+L.ml2<-pulp_paper.fa2_ml$loadings
+```
+
+The uniquenesses of our variables are:
+
+```{r, echo=FALSE}
+hi2.sq<-diag(crossprod(t(pulp_paper.fa2_ml$loadings)))
+sp.var2<-diag(R)-hi2.sq
+set.caption("Specific variances")
+pander(sp.var2)
+```
+
+As in the previous case, the highest value of the estimated specific variances corresponds to FFF (0.30). Note that the value for ZST is decreased towards 0.06.
+
+```{r, echo=FALSE}
+set.caption("Communalities")
+pander(hi2.sq)
+```
+
+The value of FFF communality is grater than before (0.69 compared to 0.58), however it is still a low value with respect to the others. 
+
+On the other hand, the value of the communality of ZST is remarkably increased (0.93 instead of 0.79). So for what concerns this variable, the model with m=3 would be better.    
+
+
+Let us compute the residual matrix
+```{r, echo=FALSE}
+Residual2<-R-(L.ml2%*%t(L.ml2)+diag(pulp_paper.fa2_ml$uniquenesses))
+set.caption("Residual matrix")
+pander(round(Residual2, 3))
+```
+
+Also in this case, the model is appropriate since all entries are close to zero and the sum of squares is smaller than before, as we expected. 
+
+```{r}
+sum(Residual2^2)
+```
+
+The cumulative proportion of variance is 
+
+```{r}
+sum(hi2.sq[1:p])/p
+```
+
+This means that 92% of the total sample variation is explained by our model with m = 3.
+This is higher than before, as we expected with one more factor.
+
+
+```{r}
+pulp_paper.fa2_ml$loadings
+```
+
+However, the proportion variance of Factor 3 is not very significant (0.063), hence it could be not needed.
+
+Moreover, comparing the factor scores generated from two different extraction methods (Principal component method with varimax rotation and maximum likelihood method with regression method) and observing the correlations between them, we obtain that the third factor is not necessary for our purpose. In fact, the scatter plots shows that scores for Factor 3 do not follow the red line, while the first two do so and the correlation coefficient is lower.  
+
+```{r}
+library(psych)
+faML<-factanal(x=pulp_paper, factors=3, scores = "regression")
+faPC<-principal(r=pulp_paper, nfactors=3, rotate="varimax")
+```
+
+
+```{r, echo=FALSE,out.width="70%",fig.align='center'}
+plot(faML$scores[,1],faPC$scores[,1], pch=16,cex=0.8,
+     xlab="ML",ylab="PC",main="Factor1")
+abline(a=0,b=1,lty=1,lwd=1, col="red")
+
+plot(faML$scores[,2],faPC$scores[,2], pch=16,cex=0.8,
+     xlab="ML",ylab="PC",main="Factor2")
+abline(a=0,b=1,lty=1,lwd=1, col="red")
+plot(faML$scores[,3],faPC$scores[,3], pch=16,cex=0.8,
+     xlab="ML",ylab="PC",main="Factor3")
+abline(a=0,b=1,lty=1,lwd=1, col="red")
+```
+
+
+```{r}
+cor(faML$scores[,1],faPC$scores[,1])
+cor(faML$scores[,2],faPC$scores[,2])
+cor(faML$scores[,3],faPC$scores[,3])
+```
+
+So, it is reasonable to choose m = 2 factors because the third factor does not count very much in our analysis and also because the percentage of the total variation explained in our model by two factors is greater than 80%, that is enough. 
+
+Now, let us analyze the possible interpretation of our two factors looking at the estimated factor loading matrix and the plot of the loadings. 
+
+```{r,echo=FALSE,out.width="70%",fig.align='center'}
+L.ml<-pulp_paper.fa_ml$loadings[,]
+plot(Factor1 ~ Factor2, data=L.ml, ylim=c(-0.8,1.2), xlim=c(-0.8,1.1))
+abline(h=0, lty=2,lwd=1)
+abline(v=0, lty=2,lwd=1)
+abline(a=0,b=1,lwd=1)
+
+points(x = L.ml[1,2], y = L.ml[1,1], pch=16, col="blue")
+points(x = L.ml[2,2], y = L.ml[2,1], pch=16, col="blue")
+points(x = L.ml[3,2], y = L.ml[3,1], pch=16, col="blue")
+points(x = L.ml[4,2], y = L.ml[4,1], pch=16, col="blue")
+points(x = L.ml[7,2], y = L.ml[7,1], pch=16, col="red")
+points(x = L.ml[5,2], y = L.ml[5,1], pch=16, col="orange")
+points(x = L.ml[6,2], y = L.ml[6,1], pch=16, col="orange")
+points(x = L.ml[8,2], y = L.ml[8,1], pch=16, col="green")
+
+text(L.ml[1,2], L.ml[1,1], labels = "BL", cex=0.8, pos=3)
+text(L.ml[2,2], L.ml[2,1], labels = "EM", cex=0.8, pos=2)
+text(L.ml[3,2], L.ml[3,1], labels = "SF", cex=0.8, pos=4)
+text(L.ml[4,2], L.ml[4,1], labels = "BS", cex=0.8, pos=3)
+text(L.ml[5,2], L.ml[5,1], labels = "AFL", cex=0.8, pos=4)
+text(L.ml[6,2], L.ml[6,1], labels = "LFF", cex=0.8, pos=4)
+text(L.ml[7,2], L.ml[7,1], labels = "FFF", cex=0.8, pos=4)
+text(L.ml[8,2], L.ml[8,1], labels = "ZST", cex=0.8, pos=4)
+set.caption("Loadings")
+pander(round(L.ml,3))
+```
+
+Loadings close to -1 or 1 indicate that the factor strongly influences the variable. 
+All the variables load on the first factor, in particular the first four paper properties and ZST have loadings larger in size. So it follows that Factor1 describes the quality of the paper in terms of strength. 
+
+While Factor2 concerns the length of pulp fibers, since only AFL, LFF and FFF variables load on this factor quite well (considering the absolute value of the loadings).
+
+FFF has similar large negative loadings on both factors and so it is not well explained by any particular factor.
+
+To give a better interpretation to the factors, we try to compute the factor analysis with varimax rotation method.
+
+```{r}
+pulp_paper.fa3_ml<-factanal(covmat=R, factors = 2, rotation = "varimax")
+```
+
+```{r, echo=FALSE}
+pulp_paper.fa3_ml
+```
+
+
+In this case, the loadings change significantly and give more information about which variable loads most on which factor, as we can see in the plot below. 
+
+
+```{r,echo=FALSE,out.width="70%",fig.align='center'}
+
+L.ml3<-pulp_paper.fa3_ml$loadings[,]
+plot(Factor1 ~ Factor2, data=L.ml3, ylim=c(-0.5,1.2), xlim=c(-0.8,1.1))
+abline(h=0, lty=2,lwd=1)
+abline(v=0, lty=2,lwd=1)
+abline(a=0, b=1, lwd=1)
+
+points(x = L.ml3[1,2], y = L.ml3[1,1], pch=16, col="blue")
+points(x = L.ml3[2,2], y = L.ml3[2,1], pch=16, col="blue")
+points(x = L.ml3[3,2], y = L.ml3[3,1], pch=16, col="blue")
+points(x = L.ml3[4,2], y = L.ml3[4,1], pch=16, col="blue")
+points(x = L.ml3[7,2], y = L.ml3[7,1], pch=16, col="red")
+points(x = L.ml3[5,2], y = L.ml3[5,1], pch=16, col="orange")
+points(x = L.ml3[6,2], y = L.ml3[6,1], pch=16, col="orange")
+points(x = L.ml3[8,2], y = L.ml3[8,1], pch=16, col="green")
+
+text(L.ml3[1,2], L.ml3[1,1], labels = "BL", cex=0.8, pos=3)
+text(L.ml3[2,2], L.ml3[2,1], labels = "EM", cex=0.8, pos=2)
+text(L.ml3[3,2], L.ml3[3,1], labels = "SF", cex=0.8, pos=4)
+text(L.ml3[4,2], L.ml3[4,1], labels = "BS", cex=0.8, pos=3)
+text(L.ml3[5,2], L.ml3[5,1], labels = "AFL", cex=0.8, pos=4)
+text(L.ml3[6,2], L.ml3[6,1], labels = "LFF", cex=0.8, pos=4)
+text(L.ml3[7,2], L.ml3[7,1], labels = "FFF", cex=0.8, pos=4)
+text(L.ml3[8,2], L.ml3[8,1], labels = "ZST", cex=0.8, pos=4)
+set.caption("Loadings")
+pander(round(pulp_paper.fa3_ml$loadings[,],3))
+
+```
+
+Indeed, the blue points, which represent the paper properties, are above the diagonal and in fact they load on the Factor1 (y-axis). While LFF and AFL are described by Factor2 (x-axis). 
+
+Differently from above, ZST loads equally on both factors because it provides information on the fiber strength measured on paper. 
+
+Considering the absolute value of the factor loadings of FFF, we can notice that the largest one is the one related to Factor2 (described as before).
+
+Now, let us make the scatterplot of the factor scores obtained by the regression method. 
+```{r, echo=FALSE,out.width="70%",fig.align='center'}
+faML<-factanal(x=pulp_paper, factors=2, scores="regression")
+plot(faML$scores[,1],faML$scores[,2],pch=16,
+     xlab="Factor1",ylab="Factor2",main="pulp_paper data (ML)", cex=0.8)
+```
+
+Plot of factors scores should produce elliptical shapes when the assumption of multivariate normality is satisfied.
+
+We can say that the data do not follow a normal distribution since the points are not distributed around the value of 0. 
+
+Computing the correlation between them, we see that it is close to zero.
+
+```{r}
+cor(faML$scores[,1],faML$scores[,2])
+```
+
+This does not surprise us, because by construction of our model, we assume that the correlation between the factors has to be zero. Also variables that are highly correlated load on the same factor and hence it is reasonable that the scores of each factor are uncorrelated.
+
+Suppose now we have a new observation (15.5, 5.5, 2, −0.55, 0.6, 65, −5, 1.2) that we add to our data set. Let us make the scatterplot of the factor scores computed on our new dataset, in which the point colored in red represents the factor scores of our new observation.
+
+```{r, echo=FALSE,out.width="70%",fig.align='center'}
+pulp_paper[63,]<-c(15.5, 5.5, 2, -0.55, 0.6, 65, -5, 1.2)
+faML<-factanal(x=pulp_paper, factors=2, scores="regression")
+col.index<-rep("black",63); 
+col.index[63]<-"red"
+plot(faML$scores[,1],faML$scores[,2],pch=16,
+     xlab="Factor1",ylab="Factor2",main="pulp_paper data (ML)", col = col.index, cex=0.8)
+text(faML$scores[63,1],faML$scores[63,2], labels = "new obs", pos=4, cex=0.7)
+```
+  
+We observe that the last observation has the highest score of the Factor2 and the lowest score of the Factor1.
+
+```{r,echo=FALSE}
+faML$scores[63,]
+```
+
+
+We suppose that its collocation on the plot of the factor scores is determined by its values of the variables. 
+It has:
+
+* the minimum value for BL, EM, SF and BS
+
+```{r, echo=FALSE,fig.align='center'}
+par(mfrow=c(1,2))
+pulp_paper<-as.data.frame(scale(pulp_paper))
+boxplot(pulp_paper$BL, main="BL") 
+points(1,pulp_paper$BL[63], pch=16, col="red")
+text(1,pulp_paper$BL[63], labels = "new obs", pos=4)
+
+boxplot(pulp_paper$EM, main="EM") 
+points(1,pulp_paper$EM[63], pch=16, col="red")
+text(1,pulp_paper$EM[63], labels = "new obs", pos=4)
+```
+
+```{r,echo=FALSE,fig.align='center'}
+par(mfrow=c(1,2))
+boxplot(pulp_paper$SF, main="SF") 
+points(1,pulp_paper$SF[63], pch=16, col="red")
+text(1,pulp_paper$SF[63], labels = "new obs", pos=4)
+
+boxplot(pulp_paper$BS, main="BS") 
+points(1,pulp_paper$BS[63], pch=16, col="red")
+text(1,pulp_paper$BS[63], labels = "new obs", pos=4)
+```
+
+
+* the highest values for the variables AFL, LFF and ZST 
+
+```{r,echo=FALSE,fig.align='center'}
+par(mfrow=c(1,3))
+boxplot(pulp_paper$AFL, main="AFL") 
+points(1,pulp_paper$AFL[63], pch=16, col="red")
+text(1,pulp_paper$AFL[63], labels = "new obs", pos=4)
+
+boxplot(pulp_paper$LFF, main="LFF") 
+points(1,pulp_paper$LFF[63], pch=16, col="red")
+text(1,pulp_paper$LFF[63], labels = "new obs", pos=4)
+
+boxplot(pulp_paper$ZST, main="ZST") 
+points(1,pulp_paper$ZST[63], pch=16, col="red")
+text(1,pulp_paper$ZST[63], labels = "new obs", pos=4)
+```
+
+* the minimum value for the variable FFF
+
+```{r,echo=FALSE,fig.align='center'}
+par(mfrow=c(1,3))
+boxplot(pulp_paper$FFF, main="FFF") 
+points(1,pulp_paper$FFF[63], pch=16, col="red")
+text(1,pulp_paper$FFF[63], labels = "new obs", pos=4)
+
+```
+
+
+In addition this are the loadings of the FA with m = 2 computed on the new dataset.
+
+```{r,echo=FALSE}
+faML<-factanal(x=pulp_paper, factors=2, scores="regression")
+LM<-faML$loadings[,]
+set.caption("Loadings")
+pander(round(LM,3))
+```
+```{r,echo=FALSE}
+set.caption("Normalized values for observation 63")
+pander(pulp_paper[63,])
+```
+
+Concerning our new observation, looking at the values it takes on the variables and the loadings table, we can say that:
+
+* the variables which load most with positive coefficient on Factor1 are the first four (BL, EM, SF and BS) and it takes the minimum value on them, which is negative. So its score relative to this factor should be negative and minimum;
+
+* the variables which load most on Factor2 are the last four AFL, LFF, ZST (with positive loadings) and FFF (with negative loading) and the 63th observation takes respectively on them the maximum positive and minimum negative value. So its score relative to Factor2 should be positive and maximum.
+
+So we can deduce that the piece of paper, corresponding to the 63th observation, has a low breaking strength but good pulp fiber properties. 
+
+Moreover, considering individually the variables, we see from the boxplots that this new observation is an univariate outlier. So we want to compute the Mahalanobis distance in order to verify that it is a multivariate outlier.  
+
+```{r,echo=FALSE}
+X<- pulp_paper
+bar.x<- colMeans(X)  
+S<-cov(X)
+
+p<-dim(pulp_paper)[2]
+d<-mahalanobis(X,center=bar.x,cov=S) 
+
+col.index<-rep("black",63)
+col.index[63]<-"red"
+plot(d, pch=16, col=col.index, cex=0.8)
+text(63,d[63], labels = "new obs", pos=2, cex=0.7)
+abline(h=qchisq(1-0.01,df=p), lty=2, col="blue")
+text(1,23, labels = "level 0.99", pos=4, col="blue", cex=0.8)
+```
+
+From the plot, we note that our new observation has the highest value of Mahalanobis distance and it is above the chi-squared quantile of order 0.99 with some other observations. 
+
+
+
+\newpage
+## Exercise 2
+
+Consider the glass dataset, containing n=214 observations which represent single glass fragments.
+For each of them refractive index (*RI*) and weight percent of oxides of *Na*, *Mg*, *Al*, *Si*, *K*, *Ca*, *Ba* and *Fe* are measured. The fragments are classified as six types (variable *type*) :
+
+* WinF: window float glass
+
+* WinNF: window non float glass
+
+* Veh: vehicle window glass 
+
+* Con: containers
+
+* Tabl: tableware 
+
+* Head: vehicle headlamps 
+
+```{r,echo=FALSE}
+library(MASS)
+rm(list=ls())
+
+glass<-read.table("data/glass.txt",header=T)
+
+glass$type<-factor(glass$type)
+levels(glass$type)<-c("WinF","WinNF","Veh","Con","Tabl","Head")
+set.caption("Head of glass dataset")
+pander(head(glass))
+```
+
+We notice that we have a different amount of observations for each type, for example we have only 9 observations for Tabl while 76 for WinNF.
+
+```{r,echo=FALSE}
+pander(table(glass$type))
+```
+
+```{r,echo=FALSE}
+lookup<-c("blue", "brown", "violet", "yellow2","cyan", "red")
+names(lookup)<-c("WinF", "WinNF", "Veh", "Con", "Tabl", "Head")
+data.col<-lookup[glass$type]
+```
+
+Before performing Linear Discriminant Analysis (LDA), we check the assumption of normality of our predictors variables for each class:
+
+\newpage
+
+* WinF
+
+```{r,echo=FALSE,out.width="60%",out.height="60%",fig.align='center'}
+par(mfrow=c(2,3))
+limits<-list(c(0,250), c(0,0.8), c(0,2.8), c(0,2.5),c(0,1), c(0,3),  c(0,0.7),c(0,2.5),c(0,13))
+
+for (i in 1:6)
+{
+  x<-glass[which(glass$type=="WinF"),i]
+  hist(x, probability = T, col="white", ylim=limits[[i]],main = names(glass)[i])
+  lines(density(x), lwd=1.5, col="red")
+}
+
+```
+* WinNF
+
+```{r,echo=FALSE,out.width="60%",out.height="60%",fig.align='center'}
+par(mfrow=c(2,3))
+limits<-list(c(0,250), c(0,0.8), c(0,1.4), c(0,2),c(0,0.8), c(0,3.5),  c(0,0.7),c(0,2.5),c(0,13))
+
+for (i in 1:6)
+{
+  x<-glass[which(glass$type=="WinNF"),i]
+  hist(x, probability = T, col="white", ylim=limits[[i]],main = names(glass)[i])
+  lines(density(x), lwd=1.5, col="red")
+}
+
+```
+* Veh
+
+```{r,echo=FALSE,out.width="60%",out.height="60%",fig.align='center'}
+par(mfrow=c(2,3))
+limits<-list(c(0,300), c(0,1.2), c(0,2.8), c(0,2.5),c(0,1), c(0,3),  c(0,0.7),c(0,2.5),c(0,13))
+
+for (i in 1:6)
+{
+  x<-glass[which(glass$type=="Veh"),i]
+  hist(x, probability = T, col="white", ylim=limits[[i]],main = names(glass)[i])
+  lines(density(x), lwd=1.5, col="red")
+}
+
+```
+
+* Con
+
+```{r,echo=FALSE,out.width="60%",out.height="60%",fig.align='center'}
+par(mfrow=c(2,3))
+limits<-list(c(0,150), c(0,1), c(0,1), c(0,1.3),c(0,0.5), c(0,1.2),  c(0,0.7),c(0,2.5),c(0,13))
+
+for (i in 1:6)
+{
+  x<-glass[which(glass$type=="Con"),i]
+  hist(x, probability = T, col="white", ylim=limits[[i]],main = names(glass)[i])
+  lines(density(x), lwd=1.5, col="red")
+}
+
+```
+* Tabl
+
+```{r,echo=FALSE,out.width="60%",out.height="60%",fig.align='center'}
+par(mfrow=c(2,3))
+limits<-list(c(0,350), c(0,0.8), c(0,1), c(0,1.3),c(0,0.8), c(0,1),  c(0,0.7),c(0,2.5),c(0,13))
+
+for (i in 1:6)
+{
+  x<-glass[which(glass$type=="Tabl"),i]
+  hist(x, probability = T, col="white", ylim=limits[[i]],main = names(glass)[i])
+  lines(density(x), lwd=1.5, col="red")
+}
+
+```
+* Head
+
+```{r,echo=FALSE,out.width="60%",out.height="60%",fig.align='center'}
+par(mfrow=c(2,3))
+limits<-list(c(0,250), c(0,0.8), c(0,0.8), c(0,1.1),c(0,1), c(0,3),  c(0,0.7),c(0,2.5),c(0,13))
+
+for (i in 1:6)
+{
+  x<-glass[which(glass$type=="Head"),i]
+  hist(x, probability = T, col="white", ylim=limits[[i]],main = names(glass)[i])
+  lines(density(x), lwd=1.5, col="red")
+}
+
+```
+
+\newpage
+
+From the plots we cannot say that all of them are normally distributed since some don't have a bell shape (e.g. K and Mg) while Na, Si and Al could be approximately considered normally distributed. Hence performing LDA we don't expect high accuracy in the results.
+
+We would like to find the variables which most separate classes. 
+
+```{r,echo=FALSE,out.width="75%",fig.align='center'}
+pairs(glass[,-10], col=data.col, lower.panel = NULL, pch=16, cex=0.8)
+par(xpd = TRUE)
+legend( "bottomleft", legend = c( levels(glass$type) ), col=c("blue", "brown", "violet","yellow2","cyan","red"), cex =0.5, pch=16)
+
+```
+
+Looking at the scatterplots we can not really separate classes through variables, but there are some variables such as Ca, Si, Na and Al, that seems to do so. 
+
+
+Let us perform the linear discriminant analysis to predict the glass type. 
+
+```{r,echo=FALSE}
+glass.lda<-lda(type ~., data=glass); glass.lda
+```
+
+When the variables are measured on different scales, given $a$ the discriminant coordinate vector, the standardized one 
+
+$$ a^* = [diag(\hat{\Sigma)}]^{1/2}a $$
+provides better information than $a$ about the relative contribution of each variable to the discriminant variable. So we use it to find the coefficients of Linear Discriminat variables.
+
+```{r}
+# Compute the pooled covariance matrix 
+S1<-var(glass[glass$type=="WinF",1:9]); S2<-var(glass[glass$type=="WinNF",1:9])
+S3<-var(glass[glass$type=="Veh",1:9]); S4<-var(glass[glass$type=="Con",1:9])
+S5<-var(glass[glass$type=="Tabl",1:9]); S6<-var(glass[glass$type=="Head",1:9])
+
+n1<-70; n2<-76; n3<-17; n4<-13; n5<-9; n6<-29
+n<-n1+n2+n3+n4+n5+n6
+S<-((n1-1)*S1+(n2-1)*S2+(n3-1)*S3+(n4-1)*S4+(n5-1)*S5+(n6-1)*S6)/(n-6)
+
+# Scale the coefficient vector
+scaling<-sqrt(diag(diag(S)))%*%as.matrix((glass.lda$scaling[,1:2]))
+rownames(scaling) <- c("RI", "Na", "Mg", "Al", "Si", "K", "Ca", "Ba", "Fe")
+set.caption("Coefficients of linear discriminants")
+pander(scaling) 
+```
+
+
+Looking at the absolute values of the coefficients, we have that LD1 is mostly described by Si, Na, Ca and Al, while LD2 by Ca, Mg, Si, Na, Ba and K. So these are supposed to be the most important variables in separating the classes.
+
+Moreover if we consider LD1 and LD2 that are the linear combination of the variables, we have that LD2 is significantly described by a lot of variables hence, for example considering Ca and Mg that respectively assume high values for the classes Con/Tabl and WinF/WinNF/Veh, it is less meaningful than LD1 for separating classes.
+
+```{r,echo= FALSE}
+pred.lda<-predict(glass.lda)
+```
+
+Now let's compute the confusion matrix in order to see the missclassified observations in the prediction. 
+In our matrix the rows correspond to what the LDA predicted and the columns correspond to the known true.
+
+
+```{r,echo=FALSE}
+conf.mat<-table(predicted=pred.lda$class, true=glass$type); 
+set.caption("Confusion matrix")
+pander(conf.mat)
+```
+
+We can notice that all observations which correspond to Veh type are missclassified, identified 11 in WinF and 6 in WinNF. This make sense since from the scatterplot above we have seen that the pink points (Veh) are overlapping the blue and brown points (corresponding to WinF and WinNF, respectively).
+
+More precisely the total number of missclassifications is  
+```{r}
+n<-dim(glass)[1]
+n-sum(diag(conf.mat)) 
+```
+
+For what concerns the training error of the full lda classifier, we have 
+```{r}
+1-sum(diag(conf.mat))/n 
+```
+
+Comparing the training errors obtained for each class, it seems that the type Veh (which has all missclassified observations and hence training error equal to one) is the most heterogeneous class. On the other hand Head seems to be the most homogeneous class since its error is the minimum. 
+
+```{r,echo=FALSE}
+training.error<-c()
+for (i in 1:6)
+{
+  training.error[i]<-1-diag(conf.mat)[i]/sum(conf.mat[,i])
+}
+t_error<-t(as.matrix(training.error))
+colnames(t_error)<-c(levels(glass$type))
+set.caption("Training errors")
+pander(round(t_error,4))
+```
+
+However plotting the two discriminant variables for observations that were previously classified in each type, we can see that Veh does not seem to be so heterogeneous since the points are not spread out but are concentrated around the centroid.
+
+Hence it is possible that the training error concerning the Veh type is influenced by the fact that the observations have almost the same measurements of the observations in the classes WinF and WinNF (respectively identified with color blue and brown).
+
+
+```{r,echo=FALSE,out.width="75%", fig.align='center'}
+means.hat<-aggregate(glass[,-10],by=list(glass$type),FUN=mean)
+means.hat<-aggregate(pred.lda$x,by=list(glass$type),FUN=mean)
+means.hat<-means.hat[,-1]
+
+par(mfrow=c(2,3))
+LD1<-as.matrix(pred.lda$x[,1])
+LD2<-as.matrix(pred.lda$x[,2])
+plot(LD2[which(glass$type=="Veh"),]~LD1[which(glass$type=="Veh"),],cex=0.8,
+     xlim=c(-4,8), ylim=c(-8,4),xlab="LD1", ylab="LD2", col="violet", main="Veh")
+points(means.hat[3,1],means.hat[3,2],cex=1.5,bg="violet",pch=21)
+
+plot(LD2[which(glass$type=="WinF"),]~LD1[which(glass$type=="WinF"),],cex=0.8,
+     xlim=c(-4,8), ylim=c(-8,4),xlab="LD1", ylab="LD2", col="blue", main="WinF")
+points(means.hat[1,1],means.hat[1,2],cex=1.5,bg="blue",pch=21)
+
+plot(LD2[which(glass$type=="WinNF"),]~LD1[which(glass$type=="WinNF"),],cex=0.8,
+     xlim=c(-4,8), ylim=c(-8,4),xlab="LD1", ylab="LD2", col="brown", main="WinNF")
+points(means.hat[2,1],means.hat[2,2],cex=1.5,bg="brown",pch=21)
+
+plot(LD2[which(glass$type=="Con"),]~LD1[which(glass$type=="Con"),],cex=0.8,
+     xlim=c(-4,8), ylim=c(-8,4),xlab="LD1", ylab="LD2", col="yellow2", main="Con")
+points(means.hat[4,1],means.hat[4,2],cex=1.5,bg="yellow2",pch=21)
+
+plot(LD2[which(glass$type=="Tabl"),]~LD1[which(glass$type=="Tabl"),],cex=0.8,
+     xlim=c(-4,8), ylim=c(-8,4),xlab="LD1", ylab="LD2", col="cyan", main="Tabl")
+points(means.hat[5,1],means.hat[5,2],cex=1.5,bg="cyan",pch=21)
+
+plot(LD2[which(glass$type=="Head"),]~LD1[which(glass$type=="Head"),],cex=0.8,
+     xlim=c(-4,8), ylim=c(-8,4),xlab="LD1", ylab="LD2", col="red", main="Head")
+points(means.hat[6,1],means.hat[6,2],cex=1.5,bg="red",pch=21)
+```
+Looking at the plots we can identify Con as the most heterogeneous class. In fact its error is the biggest one excluding the Veh type.  
+
+
+Moreover let us compute the prediction with reduced rank classifier with dimension equal to 1 and 2 and compare their training error.
+
+```{r,echo=FALSE}
+pred.lda1<-predict(glass.lda, dimen = 1)
+conf1<-table(predicted=pred.lda1$class, true=glass$type) 
+set.caption("Confusion matrix dimen = 1")
+pander(conf1)
+training.error1<-c()
+for (i in 1:6)
+{
+  training.error1[i]<-1-diag(conf1)[i]/sum(conf1[,i])
+}
+
+pred.lda2<-predict(glass.lda, dimen = 2)
+conf2<-table(predicted=pred.lda2$class, true=glass$type) 
+set.caption("Confusion matrix dimen = 2")
+pander(conf2)
+
+training.error2<-c()
+for (i in 1:6)
+{
+  training.error2[i]<-1-diag(conf2)[i]/sum(conf2[,i])
+}
+
+error<-as.matrix(cbind(training.error1,training.error2))
+rownames(error)<-c("WinF", "WinNF", "Veh", "Con", "Tabl", "Head")
+colnames(error)<-c("dimen=1", "dimen=2")
+set.caption("Training errors varying the dimension")
+pander(error)
+```
+
+We observe that the training error for WinF (blue), Con (yellow) and Tabl (cyan), considering dimen = 2 instead of dimen = 1, decreases. 
+
+In fact plotting the two discriminant directions with heavy circles corresponding to the projected centroids for each class, we can see a better separation of cyan and yellow points due to LD2.
+
+```{r,echo=FALSE, out.width="75%", fig.align='center'}
+means.hat<-aggregate(glass[,-10],by=list(glass$type),FUN=mean)
+means.hat<-aggregate(pred.lda$x,by=list(glass$type),FUN=mean)
+means.hat<-means.hat[,-1]
+par(mfrow=c(1,1))
+LD1<-as.matrix(pred.lda$x[,1])
+LD2<-as.matrix(pred.lda$x[,2])
+plot(LD2~LD1,data=pred.lda$x,col=data.col,cex=0.8)
+points(means.hat[,1],means.hat[,2],cex=1.5,bg=lookup,pch=21)
+```
+
+
+On the other hand, the training error of the class Head does not change with dimen = 2. This is because its separation from the others is determined by LD1. We had already seen that its training error was the lowest one and its homogeneity is confirmed.
+
+Through the plot we see that Con observations (yellow) are spread out as we expected from the training errors. 
+
+Let us now implement a 10-fold cross validation using the partition of the observations provided by the variable groupCV to estimate the error rate:
+
+```{r}
+groupCV<-scan(file="data/groupCV.txt")
+glass2<-cbind(glass,groupCV)
+k <- length(unique(glass$type))
+errorCV<-c()
+for (i in 1:10)
+{
+  v<-c(which(glass2$groupCV==i))
+  test_data<-glass2[v,1:10]
+  train_data<-glass2[-v,1:10]
+  lda.fitCV<-lda(type~., data=train_data)
+  lda.fitCV.pred<-predict(lda.fitCV, test_data, dimen=k-1)
+  conf.mat<-table(predicted=lda.fitCV.pred$class, true=test_data$type)
+  errorCV[i]<-1-sum(diag(conf.mat))/dim(test_data)[1]
+}
+error.rate<-sum(errorCV)/10
+```
+
+
+```{r,echo=FALSE}
+error.rate
+```
+
+The error rate is higher than the training error computed before without 10-fold cross validation (0.3271028). It seems reasonable because we split our data set in test-data and train-data using the partition provided by the variable groupCV and we perform LDA on the train-data and we make the prediction on the test-data. 
+
+In order to compare the training error and 10-fold cross validation error for each reduced-rank LDA classifier we plot them.
+
+
+```{r}
+k <- length(unique(glass$type))
+train.error<-c()
+for (j in 1:k-1)
+{
+  train_data<-glass[,1:10]
+  lda.fit<-lda(type~., data=train_data)
+  lda.fit.pred<-predict(lda.fit, train_data, dimen=j)
+  conf.mat<-table(predicted=lda.fit.pred$class, true=train_data$type)
+  train.error[j]<-1-sum(diag(conf.mat))/dim(train_data)[1]
+}
+train.error
+```
+```{r}
+CV.error<-c()
+for (j in 1:k-1)
+{
+  errorCV<-c()
+  for (i in 1:10)
+  {
+    v<-c(which(glass2$groupCV==i))
+    test_data<-glass2[v,1:10]
+    train_data<-glass2[-v,1:10]
+    lda.fitCV<-lda(type~., data=train_data)
+    lda.fitCV.pred<-predict(lda.fitCV, test_data, dimen=j)
+    conf.mat<-table(predicted=lda.fitCV.pred$class, true=test_data$type)
+    errorCV[i]<-1-sum(diag(conf.mat))/dim(test_data)[1]
+  }
+  CV.error[j]<-sum(errorCV)/10
+}
+CV.error
+```
+
+
+```{r,echo=FALSE,out.width="75%", fig.align='center'}
+plot(c(1:5),CV.error,type="b",xlab = "Dimension",col="purple",cex=0.8, ylim=c(0.3,0.49),ylab = "Misclassification Rate",main="LDA and Dimension Reduction on the Glass Data")
+abline(v=4,lty=2)
+points(c(1:5),train.error,type="b",col="orange", cex=0.8)
+points(c(1:5),train.error,col="orange", pch=16, cex=0.8)
+points(c(1:5),CV.error,col="purple", pch=16, cex=0.8)
+par(xpd = TRUE)
+legend( "topright", legend = c("10-fold CV error", "train error"), col=c("purple","orange"), cex =0.8, pch=16)
+
+```
+
+As we expected the 10-fold CV error is higher than the train error with respect to each reduced-rank LDA classifier, since it is computed on predicted data which have not been used in the model.
+
+From the plot we obtain the minimum value corresponds to dimen = 4,
+hence it is preferable to choose that dimension with respect to the others.
+
+In addition, considering the errors computed for each reduced-rank LDA classifier obtained by 10-fold cross validation of each class, we can see that for every type the error decreases significantly until dimension 4, while the full-rank LDA error increases for class WinF and WinNF. 
+
+```{r}
+matrix.error<-matrix(0,nrow = 6,ncol = 5)
+test.error<-c()
+for (j in 1:5)
+{
+  folds.class<-matrix(0,nrow=6,ncol = 10)
+  for (i in 1:10)
+  {
+    v<-c(which(glass2$groupCV==i))
+    test_data<-glass2[v,1:10]
+    train_data<-glass2[-v,1:10]
+    lda.fitCV<-lda(type~., data=train_data)
+    lda.fitCV.pred<-predict(lda.fitCV, test_data, dimen=j)
+    conf.mat<-table(predicted=lda.fitCV.pred$class, true=test_data$type)
+    for (k in 1:6)
+    {
+      folds.class[k,i]<-1-diag(conf.mat)[k]/sum(conf.mat[,k])
+    }
+    matrix.error[,j]<-apply(folds.class,1,FUN=mean,na.rm=TRUE)
+  }  
+}
+```
+
+```{r,echo=FALSE}
+rownames(matrix.error)<-c("WinF", "WinNF", "Veh", "Con", "Tabl", "Head")
+colnames(matrix.error)<-c("dimen1","dimen2","dimen3","dimen4","dimen5")
+set.caption("10-fold CV error varying the dimension")
+pander(round(matrix.error,4))
+```
+
+This means that dimension 4 could be considered an optimal classifier in our model, since with dimen = 4 all the errors for each class correspond to the minimum possible value.
+
