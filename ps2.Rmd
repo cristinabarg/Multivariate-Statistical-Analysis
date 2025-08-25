@@ -1,6 +1,6 @@
 ---
-title: "Problemset 2"
-author: 'Bargetto Cristina 885847, Iavarone Marika 886338, Scanu Anna 1012903 '
+title: "Problemset"
+author: 'Bargetto Cristina'
 output:
   pdf_document:
     latex_engine: xelatex
